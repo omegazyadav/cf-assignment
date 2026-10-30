@@ -24,6 +24,8 @@ spec:
       {{- end }}
   rayClusterConfig:
     enableInTreeAutoscaling: true
+    autoscalerOptions:
+      idleTimeoutSeconds: {{ .Values.autoscalerIdleTimeoutSeconds }}
     rayVersion: {{ .Values.rayVersion | quote }}
     headGroupSpec:
       rayStartParams:

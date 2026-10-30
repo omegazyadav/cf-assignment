@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/omegazyadav/cf-assignment.git
-    targetRevision: main
+    targetRevision: master
     path: helm/mlmodel-ray
     helm:
       valueFiles:

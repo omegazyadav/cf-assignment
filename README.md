@@ -1,6 +1,8 @@
 # cf-assignment
 
-Scalable multi-model inference service: design in [docs/DESIGN.md](docs/DESIGN.md), plus a runnable demo that deploys Ray Serve model versions through ArgoCD.
+Scalable multi-model inference service. [docs/DESIGN.md](docs/DESIGN.md) is the proposed design (Docker image per model version, with diagrams). This repo also contains a runnable **working example** of a subset of it: Ray Serve model versions deployed through ArgoCD.
+
+Working-example diagrams (Mermaid, rendered by GitHub): [architecture](docs/diagrams/architecture.md), [adding a version](docs/diagrams/rollout.md).
 
 ## Prerequisites
 
