@@ -1,0 +1,21 @@
+RayService "{{ include "mlmodel-ray.fullname" . }}" deployed in namespace "{{ include "mlmodel-ray.namespace" . }}".
+
+Check status:
+  kubectl -n {{ include "mlmodel-ray.namespace" . }} get rayservice {{ include "mlmodel-ray.fullname" . }}
+  kubectl -n {{ include "mlmodel-ray.namespace" . }} get pods -l ray.io/node-type
+
+Port-forward the Serve endpoint:
+  kubectl -n {{ include "mlmodel-ray.namespace" . }} port-forward svc/{{ include "mlmodel-ray.fullname" . }}-serve-svc 8000:8000
+
+Each entry in serve.applications is deployed as its own independent, independently
+scaling Serve application, reachable under its own route_prefix:
+{{- range .Values.serve.applications }}
+  curl -s http://127.0.0.1:8000{{ .routePrefix }}/health
+  curl -s -X POST http://127.0.0.1:8000{{ .routePrefix }}/predict \
+    -H "Content-Type: application/json" \
+    -d '{"features":[5.1,3.5,1.4,0.2]}'
+{{- end }}
+
+Ray dashboard (head service):
+  kubectl -n {{ include "mlmodel-ray.namespace" . }} port-forward svc/{{ include "mlmodel-ray.fullname" . }}-head-svc 8265:8265
+  open http://127.0.0.1:8265

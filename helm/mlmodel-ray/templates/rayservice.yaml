@@ -1,0 +1,155 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: {{ include "mlmodel-ray.fullname" . }}
+  namespace: {{ include "mlmodel-ray.namespace" . }}
+  labels:
+    {{- include "mlmodel-ray.labels" . | nindent 4 }}
+spec:
+  serveConfigV2: |
+    proxy_location: {{ .Values.serve.proxyLocation }}
+    applications:
+      {{- range .Values.serve.applications }}
+      - name: {{ .name }}
+        import_path: app.ray_serve:entrypoint
+        route_prefix: {{ .routePrefix }}
+        args:
+          model_path: {{ .modelPath }}
+        deployments:
+          - name: {{ .deploymentName }}
+            autoscaling_config:
+              min_replicas: {{ .autoscaling.minReplicas }}
+              max_replicas: {{ .autoscaling.maxReplicas }}
+              target_ongoing_requests: {{ .autoscaling.targetOngoingRequests }}
+      {{- end }}
+  rayClusterConfig:
+    enableInTreeAutoscaling: true
+    rayVersion: {{ .Values.rayVersion | quote }}
+    headGroupSpec:
+      rayStartParams:
+        {{- toYaml .Values.head.rayStartParams | nindent 8 }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: kuberay
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            ray.io/node-type: head
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/path: /metrics
+            prometheus.io/port: "8080"
+        spec:
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 10 }}
+          {{- end }}
+          containers:
+            - name: ray-head
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              workingDir: /app
+              ports:
+                - containerPort: 6379
+                  name: gcs-server
+                  protocol: TCP
+                - containerPort: 8265
+                  name: dashboard
+                  protocol: TCP
+                - containerPort: 10001
+                  name: client
+                  protocol: TCP
+                - containerPort: 8000
+                  name: serve
+                  protocol: TCP
+                - containerPort: 8080
+                  name: metrics
+                  protocol: TCP
+              env:
+                {{- range $k, $v := .Values.env }}
+                - name: {{ $k }}
+                  value: {{ $v | quote }}
+                {{- end }}
+                {{- with .Values.dashboard }}
+                - name: RAY_GRAFANA_HOST
+                  value: {{ .grafanaHost | quote }}
+                - name: RAY_GRAFANA_IFRAME_HOST
+                  value: {{ .grafanaIframeHost | quote }}
+                - name: RAY_PROMETHEUS_HOST
+                  value: {{ .prometheusHost | quote }}
+                {{- end }}
+              resources:
+                {{- toYaml .Values.head.resources | nindent 16 }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+    workerGroupSpecs:
+      - groupName: {{ .Values.worker.groupName }}
+        replicas: {{ .Values.worker.replicas }}
+        minReplicas: {{ .Values.worker.minReplicas }}
+        maxReplicas: {{ .Values.worker.maxReplicas }}
+        numOfHosts: 1
+        priority: 0
+        rayStartParams:
+          {{- toYaml .Values.worker.rayStartParams | nindent 10 }}
+        template:
+          metadata:
+            labels:
+              {{- include "mlmodel-ray.selectorLabels" . | nindent 14 }}
+              ray.io/node-type: worker
+            annotations:
+              prometheus.io/scrape: "true"
+              prometheus.io/path: /metrics
+              prometheus.io/port: "8080"
+          spec:
+            {{- with .Values.imagePullSecrets }}
+            imagePullSecrets:
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+            containers:
+              - name: ray-worker
+                image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+                imagePullPolicy: {{ .Values.image.pullPolicy }}
+                workingDir: /app
+                ports:
+                  - containerPort: 8080
+                    name: metrics
+                    protocol: TCP
+                env:
+                  {{- range $k, $v := .Values.env }}
+                  - name: {{ $k }}
+                    value: {{ $v | quote }}
+                  {{- end }}
+                resources:
+                  {{- toYaml .Values.worker.resources | nindent 18 }}
+                readinessProbe:
+                  exec:
+                    command:
+                      - bash
+                      - -c
+                      - wget --tries=1 -T 2 -q -O- http://localhost:52365/api/local_raylet_healthz | grep success
+                  initialDelaySeconds: 10
+                  periodSeconds: 5
+                  timeoutSeconds: 2
+                  successThreshold: 1
+                  failureThreshold: 1
+            {{- with .Values.nodeSelector }}
+            nodeSelector:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- with .Values.tolerations }}
+            tolerations:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+            {{- with .Values.affinity }}
+            affinity:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}

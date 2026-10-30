@@ -1,0 +1,89 @@
+nameOverride: ""
+fullnameOverride: ""
+
+namespace:
+  create: false
+  name: mlops
+
+image:
+  repository: docker.io/omegazyadav/mlmodel
+  tag: "sha-541598a"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+rayVersion: "2.58.0"
+
+serve:
+  proxyLocation: EveryNode
+  applications:
+    - name: random-forest-1-0-0
+      modelPath: /app/model/random_forest-1-0-0.joblib
+      routePrefix: /random-forest-1-0-0
+      deploymentName: MLModelDeployment
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        targetOngoingRequests: 5
+    - name: random-forest-1-0-1
+      modelPath: /app/model/random_forest-1-0-1.joblib
+      routePrefix: /random-forest-1-0-1
+      deploymentName: MLModelDeployment
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        targetOngoingRequests: 5
+    - name: random-forest-2-0-0
+      modelPath: /app/model/random_forest-2-0-0.joblib
+      routePrefix: /random-forest-2-0-0
+      deploymentName: MLModelDeployment
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        targetOngoingRequests: 5
+    - name: logistic-regression-1-0-0
+      modelPath: /app/model/logistic_regression-1-0-0.joblib
+      routePrefix: /logistic-regression-1-0-0
+      deploymentName: MLModelDeployment
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 2
+        targetOngoingRequests: 5
+
+env:
+  PYTHONPATH: /app
+
+head:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 4Gi
+  rayStartParams:
+    dashboard-host: "0.0.0.0"
+dashboard: {}
+
+worker:
+  groupName: worker-group
+  replicas: 1
+  minReplicas: 1
+  maxReplicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  rayStartParams: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+istio:
+  enabled: false
+  host: mlmodel-ray.localhost
+  hostSuffix: ""

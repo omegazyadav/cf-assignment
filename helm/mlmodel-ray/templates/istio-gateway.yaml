@@ -1,0 +1,21 @@
+{{- if .Values.istio.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: {{ include "mlmodel-ray.fullname" . }}
+  namespace: {{ include "mlmodel-ray.namespace" . }}
+  labels:
+    {{- include "mlmodel-ray.labels" . | nindent 4 }}
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        {{- range .Values.serve.applications }}
+        - {{ .name }}{{ if $.Values.istio.hostSuffix }}-{{ $.Values.istio.hostSuffix }}{{ end }}.{{ $.Values.istio.host }}
+        {{- end }}
+{{- end }}

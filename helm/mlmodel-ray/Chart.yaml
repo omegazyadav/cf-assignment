@@ -1,0 +1,14 @@
+apiVersion: v2
+name: mlmodel-ray
+description: Helm chart for the MLOps model served via Ray Serve (RayService, KubeRay)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - mlops
+  - ray
+  - ray-serve
+  - kuberay
+home: https://github.com/omegazyadav/cf-assignment
+maintainers:
+  - name: omegazyadav

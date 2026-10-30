@@ -1,0 +1,32 @@
+{{- if .Values.istio.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{ include "mlmodel-ray.fullname" . }}
+  namespace: {{ include "mlmodel-ray.namespace" . }}
+  labels:
+    {{- include "mlmodel-ray.labels" . | nindent 4 }}
+spec:
+  hosts:
+    {{- range .Values.serve.applications }}
+    - {{ .name }}{{ if $.Values.istio.hostSuffix }}-{{ $.Values.istio.hostSuffix }}{{ end }}.{{ $.Values.istio.host }}
+    {{- end }}
+  gateways:
+    - {{ include "mlmodel-ray.fullname" . }}
+  http:
+    {{- range .Values.serve.applications }}
+    - name: {{ .name }}
+      match:
+        - authority:
+            prefix: {{ .name }}{{ if $.Values.istio.hostSuffix }}-{{ $.Values.istio.hostSuffix }}{{ end }}.{{ $.Values.istio.host }}
+          uri:
+            prefix: /
+      rewrite:
+        uri: {{ .routePrefix }}/
+      route:
+        - destination:
+            host: {{ include "mlmodel-ray.fullname" $ }}-serve-svc.{{ include "mlmodel-ray.namespace" $ }}.svc.cluster.local
+            port:
+              number: 8000
+    {{- end }}
+{{- end }}

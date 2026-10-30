@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mlmodel-ray-random-forest-1-0-0
+  namespace: argocd
+  labels:
+    tier: kuberay
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/omegazyadav/cf-assignment.git
+    targetRevision: main
+    path: helm/mlmodel-ray
+    helm:
+      valueFiles:
+        - values.yaml
+      values: |
+        fullnameOverride: mlmodel-ray-random-forest-1-0-0
+        namespace:
+          create: false
+        istio:
+          enabled: false
+        serve:
+          proxyLocation: EveryNode
+          applications:
+            - name: random-forest-1-0-0
+              modelPath: /app/model/random_forest-1-0-0.joblib
+              routePrefix: /random-forest-1-0-0
+              deploymentName: MLModelDeployment
+              autoscaling:
+                minReplicas: 1
+                maxReplicas: 4
+                targetOngoingRequests: 5
+            - name: random-forest-1-0-1
+              modelPath: /app/model/random_forest-1-0-1.joblib
+              routePrefix: /random-forest-1-0-1
+              deploymentName: MLModelDeployment
+              autoscaling:
+                minReplicas: 1
+                maxReplicas: 4
+                targetOngoingRequests: 5
+            - name: random-forest-2-0-0
+              modelPath: /app/model/random_forest-2-0-0.joblib
+              routePrefix: /random-forest-2-0-0
+              deploymentName: MLModelDeployment
+              autoscaling:
+                minReplicas: 1
+                maxReplicas: 4
+                targetOngoingRequests: 5
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

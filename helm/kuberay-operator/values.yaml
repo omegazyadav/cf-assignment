@@ -1,0 +1,15 @@
+kuberay-operator:
+  replicas: 1
+
+  image:
+    repository: quay.io/kuberay/operator
+    tag: v1.7.0
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

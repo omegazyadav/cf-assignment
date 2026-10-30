@@ -1,0 +1,7 @@
+apiVersion: v2
+name: kuberay-operator
+version: 0.1.0
+dependencies:
+  - name: kuberay-operator
+    repository: https://ray-project.github.io/kuberay-helm/
+    version: 1.7.0

@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mlmodel-ray-logistic-regression-1-0-0
+  namespace: argocd
+  labels:
+    tier: kuberay
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/omegazyadav/cf-assignment.git
+    targetRevision: main
+    path: helm/mlmodel-ray
+    helm:
+      valueFiles:
+        - values.yaml
+      values: |
+        fullnameOverride: mlmodel-ray-logistic-regression-1-0-0
+        namespace:
+          create: false
+        istio:
+          enabled: false
+        serve:
+          proxyLocation: EveryNode
+          applications:
+            - name: logistic-regression-1-0-0
+              modelPath: /app/model/logistic_regression-1-0-0.joblib
+              routePrefix: /logistic-regression-1-0-0
+              deploymentName: MLModelDeployment
+              autoscaling:
+                minReplicas: 1
+                maxReplicas: 2
+                targetOngoingRequests: 5
+        head:
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          rayStartParams:
+            dashboard-host: "0.0.0.0"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
