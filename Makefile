@@ -6,7 +6,7 @@ FAMILY        ?= random-forest
 VERSION       ?= 1-0-0
 LOCAL_PORT    ?= 8000
 
-.PHONY: repo-credentials install-ray install-models install uninstall status port-forward predict
+.PHONY: repo-credentials install-ray install-models install uninstall status versions port-forward predict
 
 repo-credentials:
 	kubectl -n $(ARGOCD_NS) create secret generic cf-assignment-repo \
@@ -33,6 +33,9 @@ uninstall:
 status:
 	kubectl -n $(ARGOCD_NS) get applications
 	kubectl -n $(MODEL_NS) get rayservices,pods
+
+versions:
+	@kubectl -n $(MODEL_NS) get rayservice -o json | python3 -c "import sys,json,re; [print(i['metadata']['name']+'\\n'+''.join('  '+m.group(1)+'\\n' for l in i['spec']['serveConfigV2'].splitlines() for m in [re.match(r'\\s*- name: (?!MLModelDeployment)(.+)',l)] if m)) for i in json.load(sys.stdin)['items']]"
 
 port-forward:
 	kubectl -n $(MODEL_NS) port-forward svc/mlmodel-ray-$(FAMILY)-$(VERSION)-serve-svc $(LOCAL_PORT):8000
