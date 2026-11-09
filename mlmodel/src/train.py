@@ -42,7 +42,11 @@ MODELS: Dict[str, Dict[str, Any]] = {
     },
     "logistic_regression-1-0-2": {
         "estimator": LogisticRegression,
-        "params": {"max_iter": 1000, "C": 0.5, "random_state": 42},
+        "params": {"max_iter": 500, "C": 0.5, "random_state": 42},
+    },
+    "logistic_regression-2-0-0": {
+        "estimator": LogisticRegression,
+        "params": {"max_iter": 600, "C": 0.5, "random_state": 42},
     },
 }
 
