@@ -199,20 +199,15 @@ sequenceDiagram
     ML->>CI: Push model code and artifact
     CI->>CI: Build image, contract test, load test
     CI->>Reg: Push image, resolve digest
-    CI->>Git: PR adds fraud 2-0-0 to the ApplicationSet
+    CI->>Git: PR adds model version 2-0-0 to the ApplicationSet
     Git->>Argo: Merge to main
     Argo->>Ray: Sync RayService
     Ray->>Ray: Start v2 RayService beside v1 (own cluster, route, replicas)
-    Ray->>Ray: Smoke test on /fraud-2-0-0/predict
+    Ray->>Ray: Smoke test on /*-2-0-0/predict
     Note over Ray: Shift traffic with weights at the gateway
     loop each step
         Ray->>Prom: Error rate, p95, quality metrics
         Prom-->>Git: Pass or fail
-    end
-    alt healthy
-        Git->>Git: Move default route to 2-0-0
-    else unhealthy
-        Git->>Git: Revert PR, weights back to v1
     end
 ```
 

@@ -2,9 +2,8 @@
 
 ```mermaid
 flowchart LR
-    dev([Developer]) -->|git push| repo[(GitHub repo<br/>cf-assignment, private)]
+    dev([Developer]) -->|git push| repo[(GitHub repo<br/>cf-assignment)]
     dev -->|make install| mk[Makefile]
-    mk -->|repo-credentials secret| argo
     mk -->|kubectl apply apps/*| argo
 
     subgraph cluster[Kubernetes cluster]
@@ -19,16 +18,13 @@ flowchart LR
             subgraph rf1[RayService random-forest-1-0-0]
                 rf1svc[Service serve-svc :8000] --> rf1app[Serve app<br/>1-4 replicas]
             end
-            subgraph rf2[RayService random-forest-1-0-1]
-                rf2svc[Service serve-svc :8000] --> rf2app[Serve app<br/>1-4 replicas]
-            end
             subgraph rf3[RayService random-forest-2-0-0]
                 rf3svc[Service serve-svc :8000] --> rf3app[Serve app<br/>1-4 replicas]
             end
             subgraph lr1[RayService logistic-regression-1-0-0]
                 lr1svc[Service serve-svc :8000] --> lr1app[Serve app<br/>1-4 replicas]
             end
-            subgraph lr2[RayService logistic-regression-1-0-1]
+            subgraph lr2[RayService logistic-regression-2-0-0]
                 lr2svc[Service serve-svc :8000] --> lr2app[Serve app<br/>1-4 replicas]
             end
         end

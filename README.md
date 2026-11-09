@@ -7,7 +7,7 @@ Working-example diagrams (Mermaid, rendered by GitHub): [architecture](docs/diag
 ## Prerequisites
 
 - Kubernetes cluster with ArgoCD installed in the `argocd` namespace
-- `kubectl` pointed at the cluster, `gh` authenticated (used to give ArgoCD read access to this private repo)
+- `kubectl` pointed at the cluster
 
 ## Deploy
 
@@ -18,18 +18,16 @@ make status
 
 `make install` runs:
 
-1. `repo-credentials` - registers this private repo in ArgoCD using `gh auth token` (override with `GITHUB_TOKEN=...`)
-2. `install-ray` - KubeRay operator
-3. `install-models` - applies `apps/models/applicationset.yaml`, which generates one ArgoCD Application and one RayService per model version (random-forest 1-0-0, 1-0-1, 2-0-0; logistic-regression 1-0-0, 1-0-1)
+1. `install-ray` - KubeRay operator
+2. `install-models` - applies `apps/models/applicationset.yaml`, which generates one ArgoCD Application and one RayService per model version (random-forest 1-0-0, 2-0-0; logistic-regression 1-0-0, 2-0-0)
 
 ## Try it
 
 ```bash
-make port-forward FAMILY=random-forest VERSION=1-0-0
 make predict FAMILY=random-forest VERSION=1-0-0
 ```
 
-Each version has its own service and route prefix, e.g. `/random-forest-2-0-0/predict`. In the ArgoCD UI every version is a separate Application, labelled with `model` and `version`.
+Each version has its own service and route prefix, e.g. `/predict`. In the ArgoCD UI every version is a separate Application, labelled with `model` and `version`.
 
 ## Add a model version
 
