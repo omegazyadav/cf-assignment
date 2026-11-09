@@ -19,6 +19,8 @@ spec:
             version: 1-0-0
           - family: logistic-regression
             version: 1-0-1
+          - family: logistic-regression
+            version: 2-0-0
   syncPolicy:
     preserveResourcesOnDeletion: false
   template:
