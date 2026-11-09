@@ -12,13 +12,9 @@ spec:
           - family: random-forest
             version: 1-0-0
           - family: random-forest
-            version: 1-0-1
-          - family: random-forest
             version: 2-0-0
           - family: logistic-regression
             version: 1-0-0
-          - family: logistic-regression
-            version: 1-0-1
           - family: logistic-regression
             version: 2-0-0
   syncPolicy:

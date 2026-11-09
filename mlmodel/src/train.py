@@ -28,10 +28,6 @@ MODELS: Dict[str, Dict[str, Any]] = {
         "estimator": RandomForestClassifier,
         "params": {"n_estimators": 100, "random_state": 42},
     },
-    "random_forest-1-0-1": {
-        "estimator": RandomForestClassifier,
-        "params": {"n_estimators": 200, "random_state": 42},
-    },
     "random_forest-2-0-0": {
         "estimator": RandomForestClassifier,
         "params": {"n_estimators": 300, "random_state": 42},
@@ -39,10 +35,6 @@ MODELS: Dict[str, Dict[str, Any]] = {
     "logistic_regression-1-0-0": {
         "estimator": LogisticRegression,
         "params": {"max_iter": 400, "random_state": 42},
-    },
-    "logistic_regression-1-0-2": {
-        "estimator": LogisticRegression,
-        "params": {"max_iter": 500, "C": 0.5, "random_state": 42},
     },
     "logistic_regression-2-0-0": {
         "estimator": LogisticRegression,
