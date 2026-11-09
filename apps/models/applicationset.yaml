@@ -44,7 +44,7 @@ spec:
             namespace:
               create: false
             istio:
-              enabled: false
+              enabled: true
             serve:
               proxyLocation: EveryNode
               applications:

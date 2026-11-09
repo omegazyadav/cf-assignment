@@ -37,8 +37,5 @@ status:
 versions:
 	@kubectl -n $(MODEL_NS) get rayservice -o json | python3 -c "import sys,json,re; [print(i['metadata']['name']+'\\n'+''.join('  '+m.group(1)+'\\n' for l in i['spec']['serveConfigV2'].splitlines() for m in [re.match(r'\\s*- name: (?!MLModelDeployment)(.+)',l)] if m)) for i in json.load(sys.stdin)['items']]"
 
-port-forward:
-	kubectl -n $(MODEL_NS) port-forward svc/mlmodel-ray-$(FAMILY)-$(VERSION)-serve-svc $(LOCAL_PORT):8000
-
 predict:
-	curl -s -X POST http://localhost:$(LOCAL_PORT)/$(FAMILY)-$(VERSION)/predict -H "Content-Type: application/json" -d '{"features":[5.1,3.5,1.4,0.2]}'
+	curl -s -X POST http://$(FAMILY)-$(VERSION).mlmodel-ray.localhost:8080/predict -H "Content-Type: application/json" -d '{"features":[5.1,3.5,1.4,0.2]}'
