@@ -7,7 +7,7 @@ namespace:
 
 image:
   repository: docker.io/omegazyadav/mlmodel
-  tag: "sha-f994c70"
+  tag: "sha-07370e0"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
