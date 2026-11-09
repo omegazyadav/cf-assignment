@@ -20,7 +20,7 @@ make status
 
 1. `repo-credentials` - registers this private repo in ArgoCD using `gh auth token` (override with `GITHUB_TOKEN=...`)
 2. `install-ray` - KubeRay operator
-3. `install-models` - two RayServices: `random-forest` (versions 1-0-0, 1-0-1, 2-0-0) and `logistic-regression` (1-0-0)
+3. `install-models` - applies `apps/models/applicationset.yaml`, which generates one ArgoCD Application and one RayService per model version (random-forest 1-0-0, 1-0-1, 2-0-0; logistic-regression 1-0-0, 1-0-1)
 
 ## Try it
 
@@ -29,11 +29,11 @@ make port-forward FAMILY=random-forest VERSION=1-0-0
 make predict FAMILY=random-forest VERSION=1-0-0
 ```
 
-Every version of a family is served by the same port-forwarded service under its own route prefix, e.g. `/random-forest-2-0-0/predict`.
+Each version has its own service and route prefix, e.g. `/random-forest-2-0-0/predict`. In the ArgoCD UI every version is a separate Application, labelled with `model` and `version`.
 
 ## Add a model version
 
-Add an entry to `serve.applications` in the family's `apps/<family>/application.yaml` (name, `modelPath`, `routePrefix`, autoscaling bounds) and push; ArgoCD syncs it.
+Add `- family: <family>` / `version: <x-y-z>` to the list in `apps/models/applicationset.yaml` and push; ArgoCD generates the new Application and RayService. The artifact `mlmodel/model/<family_with_underscores>-<version>.joblib` must exist in the image (add it to `mlmodel/src/train.py`, then set `image.tag` in `helm/mlmodel-ray/values.yaml` to the new build). Remove a version by deleting its list entry.
 
 ## Remove
 

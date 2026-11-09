@@ -19,7 +19,7 @@ The model-hosting layer is the Ray ecosystem: Ray Serve for serving, KubeRay for
 | Requirement | Design response |
 |---|---|
 | Models arrive as Docker images with fixed HTTP endpoints | The image is the deployable unit: KubeRay runs it as the Ray head and worker pods, and Ray Serve exposes the endpoints |
-| Many models, many versions at once | One `RayService` per model; one Ray Serve application per version, each with its own route prefix |
+| Many models, many versions at once | One `RayService` per model version, each with its own Serve application and route prefix |
 | Independent scaling | Per-application `autoscaling_config` scales replicas; the Ray autoscaler scales worker pods; Karpenter scales nodes |
 | Resilient and reliable | Multi-AZ worker groups, GCS fault tolerance, PodDisruptionBudgets, request back-pressure, zero-downtime upgrades |
 
@@ -37,56 +37,63 @@ flowchart LR
     edge --> gw[Istio ingress gateway<br/>TLS, authN, rate limit]
 
     subgraph k8s[Kubernetes cluster - multi-AZ]
-        gw --> svcA[Serve service - fraud]
-        gw --> svcB[Serve service - ranker]
+        gw -->|/fraud-1-4-0| svcA1[Serve service]
+        gw -->|/fraud-2-0-0| svcA2[Serve service]
+        gw -->|/ranker-3-2-1| svcB[Serve service]
 
-        subgraph rsA[RayService: fraud]
-            headA[Ray head<br/>Serve controller + proxy]
-            subgraph wgA[Worker group, image fraud:2.0.0]
-                a1[App fraud-1-4-0<br/>replicas 2-10]
-                a2[App fraud-2-0-0<br/>replicas 1-5]
-            end
-            headA --> wgA
+        subgraph rsA1[RayService: fraud-1-4-0]
+            headA1[Ray head<br/>Serve controller + proxy]
+            wgA1[Worker group<br/>app fraud-1-4-0, replicas 2-10]
+            headA1 --> wgA1
         end
 
-        subgraph rsB[RayService: ranker - GPU]
+        subgraph rsA2[RayService: fraud-2-0-0]
+            headA2[Ray head]
+            wgA2[Worker group<br/>app fraud-2-0-0, replicas 1-5]
+            headA2 --> wgA2
+        end
+
+        subgraph rsB[RayService: ranker-3-2-1 - GPU]
             headB[Ray head]
-            subgraph wgB[GPU worker group]
-                b1[App ranker-3-2-1<br/>replicas 1-4]
-            end
+            wgB[GPU worker group<br/>app ranker-3-2-1, replicas 1-4]
             headB --> wgB
         end
 
-        svcA --> headA
+        svcA1 --> headA1
+        svcA2 --> headA2
         svcB --> headB
 
-        op[KubeRay operator] -.manages.-> rsA
+        op[KubeRay operator] -.manages.-> rsA1
+        op -.manages.-> rsA2
         op -.manages.-> rsB
-        karp[Karpenter<br/>CPU + GPU node pools] -.nodes.-> wgA
+        karp[Karpenter<br/>CPU + GPU node pools] -.nodes.-> wgA1
+        karp -.nodes.-> wgA2
         karp -.nodes.-> wgB
     end
 
-    reg[(Container registry)] -->|pull| wgA
+    reg[(Container registry)] -->|pull| wgA1
+    reg --> wgA2
     reg --> wgB
-    redis[(Redis - GCS fault tolerance)] -.-> headA
+    redis[(Redis - GCS fault tolerance)] -.-> headA1
+    redis -.-> headA2
     redis -.-> headB
 ```
 
 ### 2.1 Request path
 
 1. Clients reach a managed edge, then the Istio ingress gateway. TLS termination, authentication (JWT/mTLS) and global rate limits live here.
-2. Routing is by host or path to the model's Serve service, then by route prefix `/<model>-<version>/` to the Serve application for that version. Clients that need reproducibility pin a version.
+2. Routing is by path prefix `/<model>-<version>/` to the Serve service of that version's RayService. Clients that need reproducibility pin a version.
 3. The Ray Serve proxy forwards the request to a replica of that application, using power-of-two-choices routing with a per-replica queue limit.
 
 ### 2.2 Per-model and per-version units
 
 | Unit | Ray object | Defined by |
 |---|---|---|
-| Model | `RayService` (head group, one or more worker groups, serve config) | Helm chart `mlmodel-ray` |
-| Version | Ray Serve application in `serveConfigV2` (`import_path`, `route_prefix`, `args`, deployment options) | An entry in `serve.applications` |
+| Model version | `RayService` (head group, one or more worker groups, serve config), one ArgoCD Application | Helm chart `mlmodel-ray`, one entry in the ApplicationSet |
+| Serve application | Ray Serve application in `serveConfigV2` (`import_path`, `route_prefix`, `args`, deployment options) | `serve.applications` in the chart values |
 | Image | Pod template of the head and worker groups | `image.tag`, pinned by digest in production |
 
-Each application declares `num_cpus` / `num_gpus`, `max_ongoing_requests`, `health_check_period_s` and its `autoscaling_config`. Versions in one RayService share a Ray cluster and Python environment. A version that needs a different image or dependencies goes into its own worker group (selected with a Ray custom resource) or its own RayService, so the ML team keeps full control of dependencies without sharing a process.
+Each application declares `num_cpus` / `num_gpus`, `max_ongoing_requests`, `health_check_period_s` and its `autoscaling_config`. Every version has its own Ray cluster, so versions share no process, Python environment or failure domain, and each can use a different image and dependencies. A model's versions that share an environment can optionally be grouped as several Serve applications in one RayService to reduce idle overhead.
 
 ### 2.3 Independent scaling
 
@@ -117,7 +124,7 @@ flowchart LR
 | Unhealthy cluster | KubeRay `serviceUnhealthySecondThreshold` and `deploymentUnhealthySecondThreshold` trigger preparation of a replacement cluster |
 | Overload | `max_ongoing_requests` and `max_queued_requests` apply back-pressure and return 503 instead of queue collapse; gateway rate limits in front |
 | Slow upstream | Istio timeouts, bounded retries and outlier detection at the gateway |
-| Noisy neighbour | Separate RayService per model, separate worker groups per resource profile, namespace quotas |
+| Noisy neighbour | Separate RayService per version, separate worker groups per resource profile, namespace quotas |
 | Bad release | Staged rollout and rollback (section 5) |
 | Bad config or infra change | Everything in Git, reviewed, applied by ArgoCD; rollback is `git revert` |
 | Secrets and network | SOPS with a cloud KMS key, mTLS in the mesh, default-deny network policies |
@@ -131,7 +138,7 @@ Default SLOs per version: 99.9% availability of non-4xx requests and a p95 laten
 | Cloud infrastructure (network, cluster, registry, buckets, DNS, Redis) | Terraform / OpenTofu with remote state | Declarative, widest provider support, plan reviewed in PRs, separate state per environment |
 | Cluster add-ons and workloads | ArgoCD with ApplicationSets | Git is the source of truth; drift detection and self-heal; audit trail; easy rollback |
 | Model hosting | Ray Serve on KubeRay (`RayService`) | Per-version applications and autoscaling, zero-downtime upgrades, operator-managed lifecycle |
-| Packaging | Helm (`mlmodel-ray` chart driven by `serve.applications`), Kustomize overlays per environment | The ML team edits only values |
+| Packaging | Helm (`mlmodel-ray` chart), Kustomize overlays per environment | The ML team edits only values |
 | Node autoscaling | Karpenter | Fast, right-sized node provisioning including GPU and spot |
 | Traffic management | Istio | mTLS, authentication, retries, timeouts, weighted routing between RayServices |
 | Secrets | SOPS with a cloud KMS key (age for local use) | GitOps-compatible, no plaintext in Git, access controlled through IAM |
@@ -142,11 +149,11 @@ Proposed layout (mono-repo, promotion by directory):
 ```
 infra/terraform/{modules,envs/{dev,staging,prod}}
 platform/                          ArgoCD, KubeRay, Istio, Karpenter, observability
-apps/<model>/application.yaml      one ArgoCD Application per model (serve.applications per version)
+apps/models/applicationset.yaml    list of model versions; one ArgoCD Application and RayService per entry
 helm/mlmodel-ray/
 ```
 
-A new version is a PR adding an entry to the model's `serve.applications` (and a new image tag if the code changed).
+A new version is a PR adding an entry to the ApplicationSet (and a new image tag if the code changed).
 
 ## 4. Monitoring and observability
 
@@ -192,10 +199,10 @@ sequenceDiagram
     ML->>CI: Push model code and artifact
     CI->>CI: Build image, contract test, load test
     CI->>Reg: Push image, resolve digest
-    CI->>Git: PR adds application fraud-2-0-0
+    CI->>Git: PR adds fraud 2-0-0 to the ApplicationSet
     Git->>Argo: Merge to main
     Argo->>Ray: Sync RayService
-    Ray->>Ray: Deploy v2 app beside v1 (own route, own replicas)
+    Ray->>Ray: Start v2 RayService beside v1 (own cluster, route, replicas)
     Ray->>Ray: Smoke test on /fraud-2-0-0/predict
     Note over Ray: Shift traffic with weights at the gateway
     loop each step
@@ -213,8 +220,7 @@ How the change reaches Ray depends on what changed:
 
 | Change | What happens |
 |---|---|
-| New version using the same image (new artifact or Serve code already in the image) | A new entry in `serve.applications`. Serve adds the application in place; existing versions keep serving untouched |
-| New version needing a new image | New worker group or RayService with the new image next to the old one; old versions are not affected |
+| New version (new artifact or image) | A new entry in the ApplicationSet creates a new Application and RayService next to the old one; existing versions are not touched |
 | Image, Ray version or head change | KubeRay zero-downtime upgrade: it creates a new Ray cluster, waits until all Serve applications are healthy, then switches the service to it and removes the old cluster |
 | Serve config change only | Applied in place to the running cluster through the Serve REST API, without restarting pods |
 
@@ -223,7 +229,7 @@ How the change reaches Ray depends on what changed:
 - **Environments:** dev, then staging (replayed traffic), then prod, each promoted by Git PR.
 - **Gates:** contract test, performance comparison with the previous version, canary analysis, optional manual approval for tier-1 models.
 - **Release namespaces (blue/green):** where whole releases rather than single versions change, deploy the full set of RayServices into a new release namespace (for example `blue` and `green`), validate it, then move traffic at the gateway.
-- **Deprecation:** after N days without traffic, announce retirement, then remove the entry from `serve.applications`; ArgoCD applies it and Ray removes the application. Images stay in the registry for reproducibility.
+- **Deprecation:** after N days without traffic, announce retirement, then remove the entry from the ApplicationSet; ArgoCD prunes the Application and its RayService. Images stay in the registry for reproducibility.
 - **Rollback:** `git revert` of the PR, or weights set back at the gateway.
 
 ### 5.2 Updating services
@@ -244,7 +250,7 @@ Config and chart changes follow the same PR and ArgoCD flow, and `selfHeal` reve
 | Choice | Reason | Cost and mitigation |
 |---|---|---|
 | Ray Serve for hosting | Per-version applications and autoscaling, model composition, GPU fractions, built-in zero-downtime upgrades | The image must be Ray-compatible. A plain HTTP image needs a thin Ray wrapper, which the platform template provides |
-| One RayService per model, apps per version | Versions share warm workers and one head, which lowers idle cost | Versions in a cluster share an environment. Use a separate worker group or RayService when a version needs a different image |
+| One RayService per model version (a model's versions can alternatively share one RayService as separate Serve applications) | Full isolation: each version has its own head, workers, failure domain and upgrade path, and is visible as its own ArgoCD Application | More head pods and idle overhead. Versions of one model that share an environment can be grouped in one RayService to cut cost |
 | Ray autoscaler plus Karpenter | Ray decides how many workers; Karpenter finds nodes | Two autoscalers to tune; keep Ray's `idleTimeoutSeconds` above node start time |
 | Single region by default | Cost and complexity are justified only for tier-1 SLOs | Cluster is rebuilt from Terraform and ArgoCD; tier-1 can add a second region |
 
@@ -254,16 +260,16 @@ The repository includes a runnable subset, deployed with `make install` onto an 
 
 | Aspect | Working example | Production design (sections 2-5) |
 |---|---|---|
-| Delivery | ArgoCD syncing `apps/*/application.yaml` from a private repo | Same, with ApplicationSets across environments |
+| Delivery | ArgoCD ApplicationSet (`apps/models/applicationset.yaml`) generating one Application per model version | Same, with generators across environments |
 | Packaging | Helm charts in `helm/` | Same |
 | Image | One image, `mlmodel`, built by CI from `mlmodel/`, with `.joblib` models baked in | One image per model from the ML team |
-| Model unit | A RayService per family (`random-forest`, `logistic-regression`) with a Serve application per version | Same |
+| Model unit | A RayService per model version, each with one Serve application | Same, grouping versions only where they share an environment |
 | Pod scaling | Serve `autoscaling_config` per version | Same |
 | Node scaling | Ray autoscaler adds worker pods (`enableInTreeAutoscaling`); nodes come from the cluster | Plus Karpenter |
 | Routing | Path prefix per version on the Serve service | Istio gateway with host routing and weights |
 | Observability | Ray Dashboard and metrics endpoint | Full OTel, Prometheus, Grafana, Loki, Jaeger stack |
-| Rollout | Add an entry to `serve.applications`, push; revert to roll back | Staged traffic shift with metric gates |
+| Rollout | Add a list entry to the ApplicationSet, push; revert to roll back | Staged traffic shift with metric gates |
 
-Known limitation of the example: the Ray head is a single pod per family without GCS fault tolerance.
+Known limitation of the example: each Ray head is a single pod without GCS fault tolerance.
 
 Example diagrams: [architecture](diagrams/architecture.md), [adding a version](diagrams/rollout.md).

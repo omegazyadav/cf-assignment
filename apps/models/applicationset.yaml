@@ -1,0 +1,82 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: mlmodel-ray
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - family: random-forest
+            version: 1-0-0
+          - family: random-forest
+            version: 1-0-1
+          - family: random-forest
+            version: 2-0-0
+          - family: logistic-regression
+            version: 1-0-0
+          - family: logistic-regression
+            version: 1-0-1
+  syncPolicy:
+    preserveResourcesOnDeletion: false
+  template:
+    metadata:
+      name: 'mlmodel-ray-{{ .family }}-{{ .version }}'
+      labels:
+        tier: model
+        model: '{{ .family }}'
+        version: '{{ .version }}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/omegazyadav/cf-assignment.git
+        targetRevision: master
+        path: helm/mlmodel-ray
+        helm:
+          valueFiles:
+            - values.yaml
+          values: |
+            fullnameOverride: mlmodel-ray-{{ .family }}-{{ .version }}
+            namespace:
+              create: false
+            istio:
+              enabled: false
+            serve:
+              proxyLocation: EveryNode
+              applications:
+                - name: {{ .family }}-{{ .version }}
+                  modelPath: /app/model/{{ .family | replace "-" "_" }}-{{ .version }}.joblib
+                  routePrefix: /{{ .family }}-{{ .version }}
+                  deploymentName: MLModelDeployment
+                  autoscaling:
+                    minReplicas: 1
+                    maxReplicas: 4
+                    targetOngoingRequests: 5
+            head:
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 1Gi
+                limits:
+                  cpu: "1"
+                  memory: 2Gi
+              rayStartParams:
+                dashboard-host: "0.0.0.0"
+            worker:
+              replicas: 0
+              minReplicas: 0
+              maxReplicas: 3
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: mlops
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

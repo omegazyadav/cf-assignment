@@ -22,13 +22,13 @@ install-ray: repo-credentials
 	kubectl -n $(ARGOCD_NS) wait --for=jsonpath='{.status.health.status}'=Healthy application/kuberay-operator --timeout=300s
 
 install-models:
-	kubectl apply -f apps/random-forest/application.yaml
-	kubectl apply -f apps/logistic-regression/application.yaml
+	kubectl apply -f apps/models/applicationset.yaml
 
 install: install-ray install-models
 
 uninstall:
-	kubectl -n $(ARGOCD_NS) delete application mlmodel-ray-random-forest-1-0-0 mlmodel-ray-logistic-regression-1-0-0 kuberay-operator --ignore-not-found
+	kubectl -n $(ARGOCD_NS) delete applicationset mlmodel-ray --ignore-not-found
+	kubectl -n $(ARGOCD_NS) delete application kuberay-operator --ignore-not-found
 
 status:
 	kubectl -n $(ARGOCD_NS) get applications
